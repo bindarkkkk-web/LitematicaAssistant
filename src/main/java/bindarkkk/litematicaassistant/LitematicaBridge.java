@@ -1,4 +1,3 @@
-
 package bindarkkk.litematicaassistant;
 
 import net.minecraft.core.BlockPos;
@@ -46,14 +45,10 @@ public class LitematicaBridge {
         }
     }
 
-    private static Object invoke(
-        Object target,
-        String methodName
-    ) throws Exception {
+    private static Object invoke(Object target, String name)
+        throws Exception {
 
-        Method method = target.getClass()
-            .getMethod(methodName);
-
+        Method method = target.getClass().getMethod(name);
         method.setAccessible(true);
 
         return method.invoke(target);
@@ -62,8 +57,7 @@ public class LitematicaBridge {
     private static Object getSelectedPlacement()
         throws Exception {
 
-        Class<?> managerClass =
-            Class.forName(DATA_MANAGER);
+        Class<?> managerClass = Class.forName(DATA_MANAGER);
 
         Object manager = managerClass
             .getMethod("getSchematicPlacementManager")
@@ -71,38 +65,26 @@ public class LitematicaBridge {
 
         if (manager == null) return null;
 
-        return invoke(
-            manager,
-            "getSelectedSchematicPlacement"
-        );
+        return invoke(manager, "getSelectedSchematicPlacement");
     }
 
     public static String getSelectedSchematicName() {
         try {
             Object placement = getSelectedPlacement();
 
-            if (placement == null) {
-                return null;
-            }
+            if (placement == null) return null;
 
-            Object name = invoke(
-                placement,
-                "getName"
-            );
+            Object name = invoke(placement, "getName");
 
-            return name == null
-                ? null
-                : name.toString();
+            return name == null ? null : name.toString();
 
         } catch (Exception e) {
             return null;
         }
     }
 
-    private static int getCoordinate(
-        Object box,
-        String name
-    ) throws Exception {
+    private static int getCoordinate(Object box, String name)
+        throws Exception {
 
         String capitalized =
             Character.toUpperCase(name.charAt(0))
@@ -115,13 +97,11 @@ public class LitematicaBridge {
 
         for (String methodName : methods) {
             try {
-                Object value = invoke(
-                    box,
-                    methodName
-                );
+                Object value = invoke(box, methodName);
 
-                return ((Number) value).intValue();
-
+                if (value instanceof Number number) {
+                    return number.intValue();
+                }
             } catch (Exception ignored) {
             }
         }
@@ -130,17 +110,18 @@ public class LitematicaBridge {
 
         while (type != null) {
             try {
-                Field field =
-                    type.getDeclaredField(name);
-
+                Field field = type.getDeclaredField(name);
                 field.setAccessible(true);
 
-                return ((Number) field.get(box))
-                    .intValue();
+                Object value = field.get(box);
 
+                if (value instanceof Number number) {
+                    return number.intValue();
+                }
             } catch (Exception ignored) {
-                type = type.getSuperclass();
             }
+
+            type = type.getSuperclass();
         }
 
         throw new NoSuchFieldException(name);
@@ -149,8 +130,7 @@ public class LitematicaBridge {
     private static Object getSchematicWorld()
         throws Exception {
 
-        Class<?> handler =
-            Class.forName(WORLD_HANDLER);
+        Class<?> handler = Class.forName(WORLD_HANDLER);
 
         return handler
             .getMethod("getSchematicWorld")
@@ -158,26 +138,21 @@ public class LitematicaBridge {
     }
 
     public static ScanResult scanSelectedSchematic() {
-
-        List<SchematicBlock> blocks =
-            new ArrayList<>();
+        List<SchematicBlock> blocks = new ArrayList<>();
 
         try {
-            Object placement =
-                getSelectedPlacement();
+            Object placement = getSelectedPlacement();
 
             if (placement == null) {
                 return failed("No schematic selected");
             }
 
-            String name = String.valueOf(
-                invoke(placement, "getName")
-            );
+            Object nameObject = invoke(placement, "getName");
+            String name = nameObject == null
+                ? "Unknown schematic"
+                : nameObject.toString();
 
-            Object box = invoke(
-                placement,
-                "getEnclosingBox"
-            );
+            Object box = invoke(placement, "getEnclosingBox");
 
             if (box == null) {
                 return failed("Schematic bounds unavailable");
@@ -211,14 +186,11 @@ public class LitematicaBridge {
 
             Method getBlockState = null;
 
-            for (Method method :
-                world.getClass().getMethods()) {
-
+            for (Method method : world.getClass().getMethods()) {
                 if (
                     method.getName().equals("getBlockState")
                     && method.getParameterCount() == 1
-                    && method.getParameterTypes()[0]
-                        == BlockPos.class
+                    && method.getParameterTypes()[0] == BlockPos.class
                 ) {
                     getBlockState = method;
                     break;
@@ -231,41 +203,31 @@ public class LitematicaBridge {
 
             int crafterCount = 0;
 
-            for (int y = minY; y <= maxY; y++) {
-                for (int z = minZ; z <= maxZ; z++) {
-                    for (int x = minX; x <= maxX; x++) {
+            for (int yy = minY; yy <= maxY; yy++) {
+                for (int zz = minZ; zz <= maxZ; zz++) {
+                    for (int xx = minX; xx <= maxX; xx++) {
 
-                        BlockPos pos =
-                            new BlockPos(x, y, z);
+                        BlockPos pos = new BlockPos(xx, yy, zz);
 
-                        BlockState state =
-                            (BlockState) getBlockState.invoke(
-                                world,
-                                pos
-                            );
+                        Object stateObject =
+                            getBlockState.invoke(world, pos);
 
-                        if (state == null || state.isAir()) {
+                        if (!(stateObject instanceof BlockState state)) {
                             continue;
                         }
 
-                        boolean crafter =
-                            state.is(Blocks.CRAFTER);
+                        if (state.isAir()) continue;
 
-                        if (crafter) {
-                            crafterCount++;
-                        }
+                        boolean crafter = state.is(Blocks.CRAFTER);
 
-                        String blockId =
-                            BuiltInRegistries.BLOCK
-                                .getKey(state.getBlock())
-                                .toString();
+                        if (crafter) crafterCount++;
+
+                        String blockId = BuiltInRegistries.BLOCK
+                            .getKey(state.getBlock())
+                            .toString();
 
                         blocks.add(
-                            new SchematicBlock(
-                                pos,
-                                blockId,
-                                crafter
-                            )
+                            new SchematicBlock(pos, blockId, crafter)
                         );
                     }
                 }
@@ -299,4 +261,4 @@ public class LitematicaBridge {
             List.of()
         );
     }
-    }
+}
