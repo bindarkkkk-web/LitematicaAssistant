@@ -6,12 +6,9 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.minecraft.client.KeyMapping;
-import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 
 public class LitematicaAssistantClient implements ClientModInitializer {
-
-    private static boolean enabled = false;
 
     private static final KeyMapping.Category CATEGORY =
         KeyMapping.Category.register(
@@ -20,10 +17,10 @@ public class LitematicaAssistantClient implements ClientModInitializer {
             )
         );
 
-    private static final KeyMapping TOGGLE_KEY =
+    private static final KeyMapping OPEN_GUI =
         KeyBindingHelper.registerKeyBinding(
             new KeyMapping(
-                "key.litematicaassistant.toggle",
+                "key.litematicaassistant.open",
                 InputConstants.Type.KEYSYM,
                 InputConstants.KEY_H,
                 CATEGORY
@@ -33,16 +30,9 @@ public class LitematicaAssistantClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            while (TOGGLE_KEY.consumeClick()) {
-                enabled = !enabled;
-
-                if (client.player != null) {
-                    client.player.displayClientMessage(
-                        Component.literal(
-                            "Assistant: " + (enabled ? "ON" : "OFF")
-                        ),
-                        true
-                    );
+            while (OPEN_GUI.consumeClick()) {
+                if (client.screen == null) {
+                    client.setScreen(new LiquidGlassScreen());
                 }
             }
         });
