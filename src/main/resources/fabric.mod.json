@@ -1,14 +1,20 @@
+
 {
   "schemaVersion": 1,
   "id": "litematicaassistant",
   "version": "${version}",
   "name": "Litematica Assistant",
-  "description": "Lightweight schematic building assistant",
-  "authors": ["bindarkkk"],
+  "description": "Lightweight schematic building assistant for Fabric",
+  "authors": [
+    "bindarkkk"
+  ],
   "environment": "client",
   "entrypoints": {
     "main": [
       "bindarkkk.litematicaassistant.LitematicaAssistant"
+    ],
+    "client": [
+      "bindarkkk.litematicaassistant.LitematicaAssistantClient"
     ]
   },
   "depends": {
