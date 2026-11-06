@@ -4,6 +4,7 @@ package bindarkkk.litematicaassistant;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 public class LiquidGlassScreen extends Screen {
@@ -11,7 +12,6 @@ public class LiquidGlassScreen extends Screen {
     private static final int BG = 0xE90B101A;
     private static final int PANEL = 0xE9161E2B;
     private static final int CARD = 0xE91D2736;
-    private static final int CARD_HOVER = 0xF0263547;
     private static final int ACCENT = 0xFF65D6C4;
     private static final int WHITE = 0xFFF0F4FA;
     private static final int MUTED = 0xFF8795A8;
@@ -41,17 +41,16 @@ public class LiquidGlassScreen extends Screen {
         "Assist with ingredient preparation"
     };
 
-    private final boolean[] modules = {
+    private static final boolean[] modules = {
         true, true, true, false, false, false
     };
 
-    private int page = 0;
-    private int hovered = -1;
+    private static volatile boolean assistantEnabled = true;
 
-    private float animation = 1.0f;
+    private int page = 0;
+
     private float[] switchAnimation = new float[6];
 
-    private boolean assistantEnabled = true;
     private boolean compactMode = false;
     private boolean notifications = true;
 
@@ -64,15 +63,33 @@ public class LiquidGlassScreen extends Screen {
     }
 
     public static void open() {
-        Minecraft.getInstance().setScreen(new LiquidGlassScreen());
+        Minecraft.getInstance().setScreen(
+            new LiquidGlassScreen()
+        );
     }
 
     public static boolean isAssistantEnabled() {
-        return true;
+        return assistantEnabled;
     }
 
     public static boolean isModuleEnabled(int index) {
-        return false;
+        if (index < 0 || index >= modules.length) {
+            return false;
+        }
+
+        return modules[index] && assistantEnabled;
+    }
+
+    private int countModules() {
+        int count = 0;
+
+        for (boolean module : modules) {
+            if (module) {
+                count++;
+            }
+        }
+
+        return count;
     }
 
     @Override
@@ -96,11 +113,18 @@ public class LiquidGlassScreen extends Screen {
         drawRound(g, x, y, panelWidth, panelHeight, BG);
 
         // Sidebar
-        drawRound(g, x + 8, y + 8, 132, panelHeight - 16, PANEL);
+        drawRound(
+            g,
+            x + 8,
+            y + 8,
+            132,
+            panelHeight - 16,
+            PANEL
+        );
 
-        // Header
+        // Branding
         g.drawString(
-            this.font,
+            font,
             "LITEMATICA",
             x + 20,
             y + 20,
@@ -109,7 +133,7 @@ public class LiquidGlassScreen extends Screen {
         );
 
         g.drawString(
-            this.font,
+            font,
             "ASSISTANT",
             x + 20,
             y + 32,
@@ -117,15 +141,25 @@ public class LiquidGlassScreen extends Screen {
             false
         );
 
-        g.fill(x + 20, y + 49, x + 126, y + 50, 0x554C657A);
+        g.fill(
+            x + 20,
+            y + 49,
+            x + 126,
+            y + 50,
+            0x554C657A
+        );
 
+        // Navigation
         for (int i = 0; i < PAGES.length; i++) {
             int itemY = y + 67 + i * 34;
+
             boolean selected = page == i;
-            boolean hover = mouseX >= x + 14
-                && mouseX <= x + 134
-                && mouseY >= itemY - 5
-                && mouseY <= itemY + 22;
+
+            boolean hover =
+                mouseX >= x + 14 &&
+                mouseX <= x + 134 &&
+                mouseY >= itemY - 5 &&
+                mouseY <= itemY + 22;
 
             if (selected) {
                 drawRound(
@@ -156,7 +190,7 @@ public class LiquidGlassScreen extends Screen {
             }
 
             g.drawString(
-                this.font,
+                font,
                 PAGES[i],
                 x + 25,
                 itemY + 3,
@@ -166,8 +200,8 @@ public class LiquidGlassScreen extends Screen {
         }
 
         g.drawString(
-            this.font,
-            "v1.0.0",
+            font,
+            "v1.0.1",
             x + 20,
             y + panelHeight - 26,
             MUTED,
@@ -179,20 +213,44 @@ public class LiquidGlassScreen extends Screen {
         int contentY = y + 20;
         int contentWidth = panelWidth - 174;
 
-        if (page == 0) {
-            renderOverview(g, contentX, contentY, contentWidth);
-        } else if (page == 1) {
-            renderModules(g, contentX, contentY, contentWidth);
-        } else if (page == 2) {
-            renderSchematic(g, contentX, contentY, contentWidth);
-        } else {
-            renderSettings(g, contentX, contentY, contentWidth);
+        switch (page) {
+            case 0 ->
+                renderOverview(
+                    g,
+                    contentX,
+                    contentY,
+                    contentWidth
+                );
+
+            case 1 ->
+                renderModules(
+                    g,
+                    contentX,
+                    contentY,
+                    contentWidth
+                );
+
+            case 2 ->
+                renderSchematic(
+                    g,
+                    contentX,
+                    contentY,
+                    contentWidth
+                );
+
+            case 3 ->
+                renderSettings(
+                    g,
+                    contentX,
+                    contentY,
+                    contentWidth
+                );
         }
 
         // Footer
         g.drawString(
-            this.font,
-            "LIQUID GLASS  /  FABRIC",
+            font,
+            "LIQUID GLASS / FABRIC",
             contentX,
             y + panelHeight - 19,
             MUTED,
@@ -208,12 +266,16 @@ public class LiquidGlassScreen extends Screen {
         int y,
         int w
     ) {
-        drawTitle(g, "Overview", "Your building workspace");
+        drawTitle(
+            g,
+            "Overview",
+            "Your building workspace"
+        );
 
         drawRound(g, x, y + 40, w, 78, CARD);
 
         g.drawString(
-            this.font,
+            font,
             "Assistant Status",
             x + 13,
             y + 52,
@@ -222,7 +284,7 @@ public class LiquidGlassScreen extends Screen {
         );
 
         g.drawString(
-            this.font,
+            font,
             assistantEnabled ? "ENABLED" : "DISABLED",
             x + 13,
             y + 72,
@@ -240,10 +302,18 @@ public class LiquidGlassScreen extends Screen {
         int half = (w - 8) / 2;
 
         drawRound(g, x, y + 128, half, 66, CARD);
-        drawRound(g, x + half + 8, y + 128, half, 66, CARD);
+
+        drawRound(
+            g,
+            x + half + 8,
+            y + 128,
+            half,
+            66,
+            CARD
+        );
 
         g.drawString(
-            this.font,
+            font,
             "Active Modules",
             x + 11,
             y + 140,
@@ -252,7 +322,7 @@ public class LiquidGlassScreen extends Screen {
         );
 
         g.drawString(
-            this.font,
+            font,
             countModules() + " / 6",
             x + 11,
             y + 162,
@@ -261,7 +331,7 @@ public class LiquidGlassScreen extends Screen {
         );
 
         g.drawString(
-            this.font,
+            font,
             "Schematic",
             x + half + 19,
             y + 140,
@@ -270,7 +340,7 @@ public class LiquidGlassScreen extends Screen {
         );
 
         g.drawString(
-            this.font,
+            font,
             getSchematicName(),
             x + half + 19,
             y + 162,
@@ -281,7 +351,7 @@ public class LiquidGlassScreen extends Screen {
         drawRound(g, x, y + 204, w, 58, PANEL);
 
         g.drawString(
-            this.font,
+            font,
             "QUICK INFORMATION",
             x + 12,
             y + 215,
@@ -290,7 +360,7 @@ public class LiquidGlassScreen extends Screen {
         );
 
         g.drawString(
-            this.font,
+            font,
             "Configure modules from the sidebar.",
             x + 12,
             y + 234,
@@ -305,15 +375,26 @@ public class LiquidGlassScreen extends Screen {
         int y,
         int w
     ) {
-        drawTitle(g, "Modules", "Manage assistant features");
+        drawTitle(
+            g,
+            "Modules",
+            "Manage assistant features"
+        );
 
         for (int i = 0; i < MODULE_NAMES.length; i++) {
             int cardY = y + 40 + i * 39;
 
-            drawRound(g, x, cardY, w, 34, CARD);
+            drawRound(
+                g,
+                x,
+                cardY,
+                w,
+                34,
+                CARD
+            );
 
             g.drawString(
-                this.font,
+                font,
                 MODULE_NAMES[i],
                 x + 10,
                 cardY + 5,
@@ -322,7 +403,7 @@ public class LiquidGlassScreen extends Screen {
             );
 
             g.drawString(
-                this.font,
+                font,
                 MODULE_DESC[i],
                 x + 10,
                 cardY + 19,
@@ -345,12 +426,16 @@ public class LiquidGlassScreen extends Screen {
         int y,
         int w
     ) {
-        drawTitle(g, "Schematic", "Connected schematic information");
+        drawTitle(
+            g,
+            "Schematic",
+            "Connected schematic information"
+        );
 
         drawRound(g, x, y + 42, w, 72, CARD);
 
         g.drawString(
-            this.font,
+            font,
             "SELECTED FILE",
             x + 12,
             y + 53,
@@ -359,7 +444,7 @@ public class LiquidGlassScreen extends Screen {
         );
 
         g.drawString(
-            this.font,
+            font,
             getSchematicName(),
             x + 12,
             y + 73,
@@ -370,7 +455,7 @@ public class LiquidGlassScreen extends Screen {
         drawRound(g, x, y + 122, w, 91, CARD);
 
         g.drawString(
-            this.font,
+            font,
             "CRAFTER ASSISTANT",
             x + 12,
             y + 134,
@@ -379,7 +464,7 @@ public class LiquidGlassScreen extends Screen {
         );
 
         g.drawString(
-            this.font,
+            font,
             "Recipe Detection: " + status(4),
             x + 12,
             y + 155,
@@ -388,7 +473,7 @@ public class LiquidGlassScreen extends Screen {
         );
 
         g.drawString(
-            this.font,
+            font,
             "Auto Ingredient: " + status(5),
             x + 12,
             y + 173,
@@ -397,7 +482,7 @@ public class LiquidGlassScreen extends Screen {
         );
 
         g.drawString(
-            this.font,
+            font,
             "Requires schematic data support.",
             x + 12,
             y + 194,
@@ -408,7 +493,7 @@ public class LiquidGlassScreen extends Screen {
         drawRound(g, x, y + 221, w, 39, PANEL);
 
         g.drawString(
-            this.font,
+            font,
             "Schematic bridge connected when available.",
             x + 10,
             y + 235,
@@ -423,7 +508,11 @@ public class LiquidGlassScreen extends Screen {
         int y,
         int w
     ) {
-        drawTitle(g, "Settings", "Customize your interface");
+        drawTitle(
+            g,
+            "Settings",
+            "Customize your interface"
+        );
 
         settingCard(
             g,
@@ -458,7 +547,7 @@ public class LiquidGlassScreen extends Screen {
         drawRound(g, x, y, w, 38, CARD);
 
         g.drawString(
-            this.font,
+            font,
             title,
             x + 10,
             y + 5,
@@ -467,7 +556,7 @@ public class LiquidGlassScreen extends Screen {
         );
 
         g.drawString(
-            this.font,
+            font,
             description,
             x + 10,
             y + 19,
@@ -488,20 +577,29 @@ public class LiquidGlassScreen extends Screen {
         String title,
         String subtitle
     ) {
+        int panelWidth = Math.min(570, width - 24);
+        int panelHeight = Math.min(350, height - 24);
+
+        int x = (width - panelWidth) / 2;
+        int y = (height - panelHeight) / 2;
+
+        int contentX = x + 154;
+        int contentY = y + 20;
+
         g.drawString(
-            this.font,
+            font,
             title,
-            this.width / 2 - 110,
-            this.height / 2 - 140,
+            contentX,
+            contentY,
             WHITE,
             false
         );
 
         g.drawString(
-            this.font,
+            font,
             subtitle,
-            this.width / 2 - 110,
-            this.height / 2 - 126,
+            contentX,
+            contentY + 14,
             MUTED,
             false
         );
@@ -513,11 +611,23 @@ public class LiquidGlassScreen extends Screen {
         int y,
         float progress
     ) {
+        progress = Math.max(
+            0.0f,
+            Math.min(1.0f, progress)
+        );
+
         int background = progress > 0.5f
             ? 0xFF286B65
             : 0xFF394555;
 
-        drawRound(g, x, y, 30, 14, background);
+        drawRound(
+            g,
+            x,
+            y,
+            30,
+            14,
+            background
+        );
 
         int knobX = x + 2 + Math.round(progress * 14);
 
@@ -539,11 +649,37 @@ public class LiquidGlassScreen extends Screen {
         int h,
         int color
     ) {
-        g.fill(x + 3, y, x + w - 3, y + h, color);
-        g.fill(x, y + 3, x + w, y + h - 3, color);
+        g.fill(
+            x + 3,
+            y,
+            x + w - 3,
+            y + h,
+            color
+        );
 
-        g.fill(x + 1, y + 2, x + 2, y + h - 2, color);
-        g.fill(x + w - 2, y + 2, x + w - 1, y + h - 2, color);
+        g.fill(
+            x,
+            y + 3,
+            x + w,
+            y + h - 3,
+            color
+        );
+
+        g.fill(
+            x + 1,
+            y + 2,
+            x + 2,
+            y + h - 2,
+            color
+        );
+
+        g.fill(
+            x + w - 2,
+            y + 2,
+            x + w - 1,
+            y + h - 2,
+            color
+        );
     }
 
     private String getSchematicName() {
@@ -563,17 +699,9 @@ public class LiquidGlassScreen extends Screen {
     }
 
     private String status(int index) {
-        return modules[index] ? "Enabled" : "Disabled";
-    }
-
-    private int countModules() {
-        int count = 0;
-
-        for (boolean module : modules) {
-            if (module) count++;
-        }
-
-        return count;
+        return isModuleEnabled(index)
+            ? "Enabled"
+            : "Disabled";
     }
 
     @Override
@@ -590,24 +718,33 @@ public class LiquidGlassScreen extends Screen {
 
     @Override
     public boolean mouseClicked(
-        double mouseX,
-        double mouseY,
-        int button
+        MouseButtonEvent event,
+        boolean doubleClick
     ) {
-        if (button != 0) return false;
+        if (event.button() != 0) {
+            return super.mouseClicked(event, doubleClick);
+        }
 
-        int panelWidth = Math.min(570, this.width - 24);
-        int panelHeight = Math.min(350, this.height - 24);
+        double mouseX = event.x();
+        double mouseY = event.y();
 
-        int x = (this.width - panelWidth) / 2;
-        int y = (this.height - panelHeight) / 2;
+        int panelWidth = Math.min(570, width - 24);
+        int panelHeight = Math.min(350, height - 24);
 
+        int x = (width - panelWidth) / 2;
+        int y = (height - panelHeight) / 2;
+
+        // Sidebar navigation
         for (int i = 0; i < PAGES.length; i++) {
             int itemY = y + 67 + i * 34;
 
             if (inside(
-                mouseX, mouseY,
-                x + 14, itemY - 5, 118, 27
+                mouseX,
+                mouseY,
+                x + 14,
+                itemY - 5,
+                118,
+                27
             )) {
                 page = i;
                 return true;
@@ -618,24 +755,33 @@ public class LiquidGlassScreen extends Screen {
         int contentY = y + 20;
         int contentWidth = panelWidth - 174;
 
+        // Overview
         if (page == 0) {
             if (inside(
-                mouseX, mouseY,
-                contentX, contentY + 40,
-                contentWidth, 78
+                mouseX,
+                mouseY,
+                contentX,
+                contentY + 40,
+                contentWidth,
+                78
             )) {
                 assistantEnabled = !assistantEnabled;
                 return true;
             }
         }
 
+        // Modules
         if (page == 1) {
             for (int i = 0; i < MODULE_NAMES.length; i++) {
                 int cardY = contentY + 40 + i * 39;
 
                 if (inside(
-                    mouseX, mouseY,
-                    contentX, cardY, contentWidth, 34
+                    mouseX,
+                    mouseY,
+                    contentX,
+                    cardY,
+                    contentWidth,
+                    34
                 )) {
                     modules[i] = !modules[i];
                     return true;
@@ -643,27 +789,34 @@ public class LiquidGlassScreen extends Screen {
             }
         }
 
+        // Settings
         if (page == 3) {
             if (inside(
-                mouseX, mouseY,
-                contentX, contentY + 44,
-                contentWidth, 38
+                mouseX,
+                mouseY,
+                contentX,
+                contentY + 44,
+                contentWidth,
+                38
             )) {
                 compactMode = !compactMode;
                 return true;
             }
 
             if (inside(
-                mouseX, mouseY,
-                contentX, contentY + 88,
-                contentWidth, 38
+                mouseX,
+                mouseY,
+                contentX,
+                contentY + 88,
+                contentWidth,
+                38
             )) {
                 notifications = !notifications;
                 return true;
             }
         }
 
-        return super.mouseClicked(mouseX, mouseY, button);
+        return super.mouseClicked(event, doubleClick);
     }
 
     private boolean inside(
@@ -674,12 +827,14 @@ public class LiquidGlassScreen extends Screen {
         int w,
         int h
     ) {
-        return mx >= x && mx <= x + w
-            && my >= y && my <= y + h;
+        return mx >= x &&
+               mx <= x + w &&
+               my >= y &&
+               my <= y + h;
     }
 
     @Override
     public boolean isPauseScreen() {
         return false;
     }
-    }
+}
