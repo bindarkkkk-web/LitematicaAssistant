@@ -3,63 +3,116 @@ package bindarkkk.litematicaassistant;
 
 public class LitematicaIntegration {
 
-    public enum ConnectionStatus {
-        AVAILABLE,
-        UNAVAILABLE,
-        SCAN_FAILED,
-        READY
-    }
-
-    private ConnectionStatus status =
-            ConnectionStatus.UNAVAILABLE;
+    private final BuildAssistant buildAssistant;
 
     private LitematicaBridge.ScanResult lastScan;
 
-    public ConnectionStatus connect() {
-        status = LitematicaBridge.isAvailable()
-                ? ConnectionStatus.AVAILABLE
-                : ConnectionStatus.UNAVAILABLE;
+    private String status = "Belum melakukan scan";
+    private boolean scanning;
+    private boolean loaded;
 
-        return status;
+    public LitematicaIntegration() {
+        this.buildAssistant = new BuildAssistant();
     }
 
-    public LitematicaBridge.ScanResult scan() {
-        if (!LitematicaBridge.isAvailable()) {
-            status = ConnectionStatus.UNAVAILABLE;
-            return null;
+    public boolean isLitematicaAvailable() {
+        return LitematicaBridge.isAvailable();
+    }
+
+    public boolean scan() {
+        if (scanning) {
+            status = "Scan sedang berjalan";
+            return false;
         }
 
-        lastScan = LitematicaBridge.scanSelectedSchematic();
+        scanning = true;
+        loaded = false;
 
-        if (lastScan == null || !lastScan.success()) {
-            status = ConnectionStatus.SCAN_FAILED;
-        } else {
-            status = ConnectionStatus.READY;
+        try {
+            if (!isLitematicaAvailable()) {
+                status = "Litematica tidak ditemukan";
+                return false;
+            }
+
+            lastScan = LitematicaBridge.scanSelectedSchematic();
+
+            if (lastScan == null) {
+                status = "Hasil scan kosong";
+                return false;
+            }
+
+            if (!lastScan.success()) {
+                status = lastScan.message();
+                return false;
+            }
+
+            if (lastScan.blocks().isEmpty()) {
+                status = "Schematic tidak memiliki block";
+                return false;
+            }
+
+            buildAssistant.load(lastScan);
+
+            loaded = true;
+            status = "Berhasil memuat "
+                    + lastScan.totalBlocks()
+                    + " block";
+
+            return true;
+
+        } catch (Exception error) {
+            status = "Integration error: "
+                    + error.getClass().getSimpleName()
+                    + " - "
+                    + error.getMessage();
+
+            return false;
+
+        } finally {
+            scanning = false;
         }
-
-        return lastScan;
     }
 
-    public String getSelectedSchematicName() {
-        return LitematicaBridge.getSelectedSchematicName();
-    }
-
-    public ConnectionStatus getStatus() {
-        return status;
+    public BuildAssistant getBuildAssistant() {
+        return buildAssistant;
     }
 
     public LitematicaBridge.ScanResult getLastScan() {
         return lastScan;
     }
 
-    public boolean isReady() {
-        return status == ConnectionStatus.READY
-                && lastScan != null
-                && lastScan.success();
+    public String getStatus() {
+        return status;
     }
 
-    public void clear() {
+    public String getSchematicName() {
+        if (lastScan != null && lastScan.success()) {
+            return lastScan.schematicName();
+        }
+
+        return LitematicaBridge.getSelectedSchematicName();
+    }
+
+    public int getTotalBlocks() {
+        return lastScan == null ? 0 : lastScan.totalBlocks();
+    }
+
+    public int getCrafterCount() {
+        return lastScan == null ? 0 : lastScan.crafterCount();
+    }
+
+    public boolean isScanning() {
+        return scanning;
+    }
+
+    public boolean isLoaded() {
+        return loaded;
+    }
+
+    public void reset() {
         lastScan = null;
-        status = ConnectionStatus.UNAVAILABLE;
+        loaded = false;
+        status = "Data schematic direset";
+        buildAssistant.stop();
     }
 }
