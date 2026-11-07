@@ -51,28 +51,34 @@ public class BuildQueue {
     }
 
     public boolean complete(BlockPos position) {
-        QueueEntry old = entries.get(position);
-        if (old == null || old.status() == Status.COMPLETED) return false;
-
-        entries.put(position, copy(old, Status.COMPLETED));
-        activateNext();
-        return true;
+        return updateStatus(position, Status.COMPLETED);
     }
 
     public boolean skip(BlockPos position) {
-        QueueEntry old = entries.get(position);
-        if (old == null || old.status() == Status.COMPLETED) return false;
-
-        entries.put(position, copy(old, Status.SKIPPED));
-        activateNext();
-        return true;
+        return updateStatus(position, Status.SKIPPED);
     }
 
     public boolean undo(BlockPos position) {
         QueueEntry old = entries.get(position);
-        if (old == null || old.status() == Status.WAITING) return false;
+
+        if (old == null || old.status() == Status.WAITING) {
+            return false;
+        }
 
         entries.put(position, copy(old, Status.WAITING));
+        activateNext();
+        return true;
+    }
+
+    private boolean updateStatus(BlockPos position, Status status) {
+        QueueEntry old = entries.get(position);
+
+        if (old == null || old.status() == Status.COMPLETED
+                || old.status() == Status.SKIPPED) {
+            return false;
+        }
+
+        entries.put(position, copy(old, status));
         activateNext();
         return true;
     }
@@ -88,18 +94,32 @@ public class BuildQueue {
     }
 
     private void activateNext() {
+        BlockPos activePosition = null;
+
         for (QueueEntry entry : entries.values()) {
             if (entry.status() == Status.ACTIVE) {
-                entries.put(entry.position(), copy(entry, Status.WAITING));
+                activePosition = entry.position();
                 break;
             }
         }
 
+        if (activePosition != null) {
+            QueueEntry old = entries.get(activePosition);
+            entries.put(activePosition, copy(old, Status.WAITING));
+        }
+
+        BlockPos nextPosition = null;
+
         for (QueueEntry entry : entries.values()) {
             if (entry.status() == Status.WAITING) {
-                entries.put(entry.position(), copy(entry, Status.ACTIVE));
+                nextPosition = entry.position();
                 break;
             }
+        }
+
+        if (nextPosition != null) {
+            QueueEntry old = entries.get(nextPosition);
+            entries.put(nextPosition, copy(old, Status.ACTIVE));
         }
     }
 
@@ -142,5 +162,4 @@ public class BuildQueue {
         entries.clear();
         nextId = 1;
     }
-                     }
-                        
+}
