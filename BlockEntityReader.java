@@ -2,7 +2,9 @@
 package bindarkkk.litematicaassistant;
 
 import java.lang.reflect.Method;
-import java.util.*;
+import java.util.Collections;
+import java.util.Map;
+import java.util.TreeMap;
 
 public class BlockEntityReader {
 
@@ -16,49 +18,102 @@ public class BlockEntityReader {
 
         Map<String, String> values = new TreeMap<>();
 
-        try {
-            Method getAllKeys = source.getClass().getMethod("getAllKeys");
-            Object keysObject = getAllKeys.invoke(source);
-
-            if (keysObject instanceof Iterable<?> keys) {
-                Method getMethod = source.getClass()
-                        .getMethod("get", String.class);
-
-                for (Object key : keys) {
-                    String name = String.valueOf(key);
-                    Object value = getMethod.invoke(source, name);
-
-                    if (value != null) {
-                        values.put(name, String.valueOf(value));
-                    }
+        if (source instanceof Map<?, ?> map) {
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                if (entry.getKey() != null && entry.getValue() != null) {
+                    values.put(
+                            String.valueOf(entry.getKey()),
+                            String.valueOf(entry.getValue())
+                    );
                 }
             }
 
-            return new BlockEntityData(
-                    source.getClass().getSimpleName(),
-                    Collections.unmodifiableMap(values)
+            return createData(source, values);
+        }
+
+        try {
+            Method keysMethod = findMethod(
+                    source.getClass(),
+                    "getAllKeys"
             );
 
-        } catch (Exception ignored) {
-            return new BlockEntityData(
-                    source.getClass().getSimpleName(),
-                    Map.of()
+            if (keysMethod == null) {
+                keysMethod = findMethod(
+                        source.getClass(),
+                        "keySet"
+                );
+            }
+
+            if (keysMethod == null) {
+                return createData(source, values);
+            }
+
+            Object keysObject = keysMethod.invoke(source);
+
+            if (!(keysObject instanceof Iterable<?> keys)) {
+                return createData(source, values);
+            }
+
+            Method getMethod = findMethod(
+                    source.getClass(),
+                    "get",
+                    String.class
             );
+
+            if (getMethod == null) {
+                return createData(source, values);
+            }
+
+            for (Object key : keys) {
+                if (key == null) continue;
+
+                String name = String.valueOf(key);
+                Object value = getMethod.invoke(source, name);
+
+                if (value != null) {
+                    values.put(name, String.valueOf(value));
+                }
+            }
+
+        } catch (Exception ignored) {
+            values.clear();
+        }
+
+        return createData(source, values);
+    }
+
+    private Method findMethod(
+            Class<?> type,
+            String name,
+            Class<?>... parameterTypes
+    ) {
+        try {
+            return type.getMethod(name, parameterTypes);
+        } catch (NoSuchMethodException ignored) {
+            return null;
         }
     }
 
-    public String getValue(
-            BlockEntityData data,
-            String key
+    private BlockEntityData createData(
+            Object source,
+            Map<String, String> values
     ) {
+        return new BlockEntityData(
+                source.getClass().getSimpleName(),
+                Collections.unmodifiableMap(
+                        new TreeMap<>(values)
+                )
+        );
+    }
+
+    public String getValue(BlockEntityData data, String key) {
         if (data == null || key == null) return null;
         return data.data().get(key);
     }
 
-    public boolean contains(
-            BlockEntityData data,
-            String key
-    ) {
-        return data != null && data.data().containsKey(key);
+    public boolean contains(BlockEntityData data, String key) {
+        return data != null
+                && key != null
+                && data.data().containsKey(key);
     }
 }
