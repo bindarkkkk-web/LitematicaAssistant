@@ -1,38 +1,39 @@
+
 package bindarkkk.litematicaassistant;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.state.BlockState;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 
-public class LitematicaBridge {
+public final class LitematicaBridge {
 
     private static final String DATA_MANAGER =
-        "fi.dy.masa.litematica.data.DataManager";
+            "fi.dy.masa.litematica.data.DataManager";
 
     private static final String WORLD_HANDLER =
-        "fi.dy.masa.litematica.world.SchematicWorldHandler";
+            "fi.dy.masa.litematica.world.SchematicWorldHandler";
 
     private static final int MAX_BLOCKS = 250000;
 
+    private LitematicaBridge() {}
+
     public record SchematicBlock(
-        BlockPos pos,
-        String blockId,
-        boolean crafter
+            BlockPos pos,
+            String blockId,
+            boolean crafter
     ) {}
 
     public record ScanResult(
-        boolean success,
-        String message,
-        String schematicName,
-        int totalBlocks,
-        int crafterCount,
-        List<SchematicBlock> blocks
+            boolean success,
+            String message,
+            String schematicName,
+            int totalBlocks,
+            int crafterCount,
+            List<SchematicBlock> blocks
     ) {}
 
     public static boolean isAvailable() {
@@ -40,225 +41,307 @@ public class LitematicaBridge {
             Class.forName(DATA_MANAGER);
             Class.forName(WORLD_HANDLER);
             return true;
-        } catch (Exception e) {
+        } catch (Throwable ignored) {
             return false;
         }
-    }
-
-    private static Object invoke(Object target, String name)
-        throws Exception {
-
-        Method method = target.getClass().getMethod(name);
-        method.setAccessible(true);
-
-        return method.invoke(target);
-    }
-
-    private static Object getSelectedPlacement()
-        throws Exception {
-
-        Class<?> managerClass = Class.forName(DATA_MANAGER);
-
-        Object manager = managerClass
-            .getMethod("getSchematicPlacementManager")
-            .invoke(null);
-
-        if (manager == null) return null;
-
-        return invoke(manager, "getSelectedSchematicPlacement");
     }
 
     public static String getSelectedSchematicName() {
         try {
             Object placement = getSelectedPlacement();
 
-            if (placement == null) return null;
-
-            Object name = invoke(placement, "getName");
-
-            return name == null ? null : name.toString();
-
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    private static int getCoordinate(Object box, String name)
-        throws Exception {
-
-        String capitalized =
-            Character.toUpperCase(name.charAt(0))
-            + name.substring(1);
-
-        String[] methods = {
-            "get" + capitalized,
-            name
-        };
-
-        for (String methodName : methods) {
-            try {
-                Object value = invoke(box, methodName);
-
-                if (value instanceof Number number) {
-                    return number.intValue();
-                }
-            } catch (Exception ignored) {
-            }
-        }
-
-        Class<?> type = box.getClass();
-
-        while (type != null) {
-            try {
-                Field field = type.getDeclaredField(name);
-                field.setAccessible(true);
-
-                Object value = field.get(box);
-
-                if (value instanceof Number number) {
-                    return number.intValue();
-                }
-            } catch (Exception ignored) {
+            if (placement == null) {
+                return "No schematic selected";
             }
 
-            type = type.getSuperclass();
+            Object name = invokeAny(
+                    placement,
+                    "getName",
+                    "getSchematicName"
+            );
+
+            return name == null ? "Unknown schematic" : name.toString();
+
+        } catch (Throwable ignored) {
+            return "Unknown schematic";
         }
-
-        throw new NoSuchFieldException(name);
-    }
-
-    private static Object getSchematicWorld()
-        throws Exception {
-
-        Class<?> handler = Class.forName(WORLD_HANDLER);
-
-        return handler
-            .getMethod("getSchematicWorld")
-            .invoke(null);
     }
 
     public static ScanResult scanSelectedSchematic() {
         List<SchematicBlock> blocks = new ArrayList<>();
 
         try {
+            if (!isAvailable()) {
+                return failed("Litematica tidak ditemukan");
+            }
+
             Object placement = getSelectedPlacement();
 
             if (placement == null) {
-                return failed("No schematic selected");
+                return failed("Pilih placement Litematica terlebih dahulu");
             }
 
-            Object nameObject = invoke(placement, "getName");
-            String name = nameObject == null
-                ? "Unknown schematic"
-                : nameObject.toString();
-
-            Object box = invoke(placement, "getEnclosingBox");
+            Object box = invokeAny(placement, "getEnclosingBox");
 
             if (box == null) {
-                return failed("Schematic bounds unavailable");
+                return failed("Bounding box schematic tidak ditemukan");
             }
 
-            int minX = getCoordinate(box, "minX");
-            int minY = getCoordinate(box, "minY");
-            int minZ = getCoordinate(box, "minZ");
+            Object schematicWorld = getSchematicWorld();
 
-            int maxX = getCoordinate(box, "maxX");
-            int maxY = getCoordinate(box, "maxY");
-            int maxZ = getCoordinate(box, "maxZ");
+            if (schematicWorld == null) {
+                return failed("Schematic world belum tersedia");
+            }
+
+            int minX = readCoordinate(box, "minX", "getMinX");
+            int minY = readCoordinate(box, "minY", "getMinY");
+            int minZ = readCoordinate(box, "minZ", "getMinZ");
+
+            int maxX = readCoordinate(box, "maxX", "getMaxX");
+            int maxY = readCoordinate(box, "maxY", "getMaxY");
+            int maxZ = readCoordinate(box, "maxZ", "getMaxZ");
 
             long volume =
-                ((long) maxX - minX + 1)
-                * ((long) maxY - minY + 1)
-                * ((long) maxZ - minZ + 1);
+                    ((long) maxX - minX + 1)
+                    * ((long) maxY - minY + 1)
+                    * ((long) maxZ - minZ + 1);
 
-            if (volume <= 0 || volume > MAX_BLOCKS) {
+            if (volume <= 0) {
+                return failed("Ukuran bounding box tidak valid");
+            }
+
+            if (volume > MAX_BLOCKS * 8L) {
                 return failed(
-                    "Schematic too large: " + volume
-                    + " positions. Limit: " + MAX_BLOCKS
+                        "Schematic terlalu besar untuk dipindai sekaligus"
                 );
             }
 
-            Object world = getSchematicWorld();
-
-            if (world == null) {
-                return failed("Schematic world unavailable");
-            }
-
-            Method getBlockState = null;
-
-            for (Method method : world.getClass().getMethods()) {
-                if (
-                    method.getName().equals("getBlockState")
-                    && method.getParameterCount() == 1
-                    && method.getParameterTypes()[0] == BlockPos.class
-                ) {
-                    getBlockState = method;
-                    break;
-                }
-            }
+            Method getBlockState = findBlockStateMethod(schematicWorld);
 
             if (getBlockState == null) {
-                return failed("BlockState method unavailable");
+                return failed("Method getBlockState tidak ditemukan");
             }
 
+            String schematicName = getSelectedSchematicName();
             int crafterCount = 0;
 
-            for (int yy = minY; yy <= maxY; yy++) {
-                for (int zz = minZ; zz <= maxZ; zz++) {
-                    for (int xx = minX; xx <= maxX; xx++) {
+            for (int y = minY; y <= maxY; y++) {
+                for (int z = minZ; z <= maxZ; z++) {
+                    for (int x = minX; x <= maxX; x++) {
 
-                        BlockPos pos = new BlockPos(xx, yy, zz);
+                        if (blocks.size() >= MAX_BLOCKS) {
+                            return new ScanResult(
+                                    false,
+                                    "Batas scan tercapai: " + MAX_BLOCKS
+                                            + " block",
+                                    schematicName,
+                                    blocks.size(),
+                                    crafterCount,
+                                    List.copyOf(blocks)
+                            );
+                        }
 
-                        Object stateObject =
-                            getBlockState.invoke(world, pos);
+                        BlockPos pos = new BlockPos(x, y, z);
 
-                        if (!(stateObject instanceof BlockState state)) {
+                        Object state = getBlockState.invoke(
+                                schematicWorld,
+                                pos
+                        );
+
+                        if (state == null || isAir(state)) {
                             continue;
                         }
 
-                        if (state.isAir()) continue;
+                        Object block = invokeAny(state, "getBlock");
 
-                        boolean crafter = state.is(Blocks.CRAFTER);
+                        if (block == null) {
+                            continue;
+                        }
 
-                        if (crafter) crafterCount++;
+                        Object key = BuiltInRegistries.BLOCK.getKey(
+                                (net.minecraft.world.level.block.Block) block
+                        );
 
-                        String blockId = BuiltInRegistries.BLOCK
-                            .getKey(state.getBlock())
-                            .toString();
+                        if (key == null) {
+                            continue;
+                        }
+
+                        String blockId = key.toString();
+                        boolean isCrafter =
+                                blockId.equals("minecraft:crafter");
+
+                        if (isCrafter) {
+                            crafterCount++;
+                        }
 
                         blocks.add(
-                            new SchematicBlock(pos, blockId, crafter)
+                                new SchematicBlock(
+                                        pos,
+                                        blockId,
+                                        isCrafter
+                                )
                         );
                     }
                 }
             }
 
             return new ScanResult(
-                true,
-                "Schematic scanned successfully",
-                name,
-                blocks.size(),
-                crafterCount,
-                List.copyOf(blocks)
+                    true,
+                    "Scan berhasil",
+                    schematicName,
+                    blocks.size(),
+                    crafterCount,
+                    List.copyOf(blocks)
             );
 
-        } catch (Exception e) {
-            return failed(
-                "Scan failed: "
-                + e.getClass().getSimpleName()
-                + ": " + e.getMessage()
+        } catch (Throwable error) {
+            Throwable cause = error.getCause() != null
+                    ? error.getCause()
+                    : error;
+
+            return new ScanResult(
+                    false,
+                    "Scan gagal: " + cause.getClass().getSimpleName()
+                            + " - " + String.valueOf(cause.getMessage()),
+                    "Unknown",
+                    blocks.size(),
+                    countCrafters(blocks),
+                    List.copyOf(blocks)
             );
         }
     }
 
-    private static ScanResult failed(String message) {
-        return new ScanResult(
-            false,
-            message,
-            null,
-            0,
-            0,
-            List.of()
+    private static Object getSelectedPlacement() throws Exception {
+        Class<?> dataManager = Class.forName(DATA_MANAGER);
+
+        Object manager = dataManager
+                .getMethod("getSchematicPlacementManager")
+                .invoke(null);
+
+        if (manager == null) {
+            return null;
+        }
+
+        return invokeAny(
+                manager,
+                "getSelectedSchematicPlacement"
         );
     }
-}
+
+    private static Object getSchematicWorld() throws Exception {
+        Class<?> handler = Class.forName(WORLD_HANDLER);
+
+        return handler
+                .getMethod("getSchematicWorld")
+                .invoke(null);
+    }
+
+    private static Method findBlockStateMethod(Object world) {
+        for (Method method : world.getClass().getMethods()) {
+            if (!method.getName().equals("getBlockState")) {
+                continue;
+            }
+
+            Class<?>[] params = method.getParameterTypes();
+
+            if (params.length == 1
+                    && params[0].isAssignableFrom(BlockPos.class)) {
+                return method;
+            }
+        }
+
+        return null;
+    }
+
+    private static Object invokeAny(
+            Object target,
+            String... methodNames
+    ) throws Exception {
+
+        if (target == null) {
+            return null;
+        }
+
+        for (String name : methodNames) {
+            try {
+                Method method = target.getClass().getMethod(name);
+                return method.invoke(target);
+            } catch (NoSuchMethodException ignored) {
+                // Coba nama method berikutnya.
+            }
+        }
+
+        return null;
+    }
+
+    private static int readCoordinate(
+            Object target,
+            String fieldName,
+            String methodName
+    ) throws Exception {
+
+        try {
+            Method method = target.getClass().getMethod(methodName);
+            Object value = method.invoke(target);
+
+            if (value instanceof Number number) {
+                return number.intValue();
+            }
+        } catch (NoSuchMethodException ignored) {
+            // Coba baca field.
+        }
+
+        Class<?> type = target.getClass();
+
+        while (type != null) {
+            try {
+                Field field = type.getDeclaredField(fieldName);
+                field.setAccessible(true);
+
+                Object value = field.get(target);
+
+                if (value instanceof Number number) {
+                    return number.intValue();
+                }
+
+            } catch (NoSuchFieldException ignored) {
+                type = type.getSuperclass();
+                continue;
+            }
+
+            break;
+        }
+
+        throw new NoSuchFieldException(
+                "Koordinat tidak ditemukan: " + fieldName
+        );
+    }
+
+    private static boolean isAir(Object state) throws Exception {
+        Method method = state.getClass().getMethod("isAir");
+        return Boolean.TRUE.equals(method.invoke(state));
+    }
+
+    private static int countCrafters(List<SchematicBlock> blocks) {
+        int count = 0;
+
+        for (SchematicBlock block : blocks) {
+            if (block.crafter()) {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    private static ScanResult failed(String message) {
+        return new ScanResult(
+                false,
+                message,
+                "Unknown",
+                0,
+                0,
+                List.of()
+        );
+    }
+            }
