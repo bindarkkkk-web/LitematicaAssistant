@@ -1,9 +1,8 @@
 
 package bindarkkk.litematicaassistant;
 
-import java.util.Collections;
-import java.util.Map;
-import java.util.TreeMap;
+import net.minecraft.core.BlockPos;
+import java.util.*;
 
 public class MaterialTracker {
 
@@ -17,44 +16,63 @@ public class MaterialTracker {
     private final Map<String, Integer> required = new TreeMap<>();
     private final Map<String, Integer> placed = new TreeMap<>();
 
-    // Memuat kebutuhan material dari hasil scan schematic
+    private final Map<BlockPos, String> completedPositions =
+            new HashMap<>();
+
     public void load(LitematicaBridge.ScanResult result) {
-        required.clear();
-        placed.clear();
+        clear();
 
-        if (result == null || !result.success()) {
-            return;
-        }
+        if (result == null || !result.success()) return;
 
-        for (LitematicaBridge.SchematicBlock block : result.blocks()) {
-            if (block == null || block.blockId() == null) {
-                continue;
-            }
+        for (var block : result.blocks()) {
+            if (block == null || block.blockId() == null) continue;
 
             required.merge(block.blockId(), 1, Integer::sum);
         }
     }
 
-    // Tandai satu blok sebagai selesai dipasang
+    public boolean markPlaced(BlockPos position, String blockId) {
+        if (position == null || blockId == null) return false;
+
+        if (completedPositions.containsKey(position)) return false;
+
+        int current = placed.getOrDefault(blockId, 0);
+        int total = required.getOrDefault(blockId, 0);
+
+        if (current >= total) return false;
+
+        completedPositions.put(position, blockId);
+        placed.put(blockId, current + 1);
+
+        return true;
+    }
+
     public void markPlaced(String blockId) {
-        if (blockId == null) {
-            return;
-        }
+        if (blockId == null) return;
 
-        int currentPlaced = placed.getOrDefault(blockId, 0);
-        int totalRequired = required.getOrDefault(blockId, 0);
+        int current = placed.getOrDefault(blockId, 0);
+        int total = required.getOrDefault(blockId, 0);
 
-        if (currentPlaced < totalRequired) {
-            placed.put(blockId, currentPlaced + 1);
+        if (current < total) {
+            placed.put(blockId, current + 1);
         }
     }
 
-    // Batalkan satu progres material
-    public void undoPlaced(String blockId) {
-        if (blockId == null) {
-            return;
-        }
+    public boolean undoPlaced(BlockPos position) {
+        String blockId = completedPositions.remove(position);
 
+        if (blockId == null) return false;
+
+        decrement(blockId);
+        return true;
+    }
+
+    public void undoPlaced(String blockId) {
+        if (blockId == null) return;
+        decrement(blockId);
+    }
+
+    private void decrement(String blockId) {
         int current = placed.getOrDefault(blockId, 0);
 
         if (current <= 1) {
@@ -78,14 +96,12 @@ public class MaterialTracker {
 
     public int getTotalRequired() {
         return required.values().stream()
-                .mapToInt(Integer::intValue)
-                .sum();
+                .mapToInt(Integer::intValue).sum();
     }
 
     public int getTotalPlaced() {
         return placed.values().stream()
-                .mapToInt(Integer::intValue)
-                .sum();
+                .mapToInt(Integer::intValue).sum();
     }
 
     public int getTotalRemaining() {
@@ -94,12 +110,7 @@ public class MaterialTracker {
 
     public float getProgress() {
         int total = getTotalRequired();
-
-        if (total == 0) {
-            return 0;
-        }
-
-        return (float) getTotalPlaced() / total * 100f;
+        return total == 0 ? 0 : (float) getTotalPlaced() / total * 100f;
     }
 
     public MaterialInfo getInfo(String blockId) {
@@ -117,10 +128,12 @@ public class MaterialTracker {
 
     public void reset() {
         placed.clear();
+        completedPositions.clear();
     }
 
     public void clear() {
         required.clear();
         placed.clear();
+        completedPositions.clear();
     }
 }
