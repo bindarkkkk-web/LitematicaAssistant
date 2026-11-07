@@ -4,6 +4,7 @@ package bindarkkk.litematicaassistant;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -14,7 +15,8 @@ public class WorldScanner {
     public enum MatchStatus {
         MATCH,
         MISSING,
-        DIFFERENT
+        DIFFERENT,
+        UNAVAILABLE
     }
 
     public record WorldResult(
@@ -49,12 +51,31 @@ public class WorldScanner {
         int different = 0;
 
         for (var block : blocks) {
-            if (block == null || block.pos() == null) continue;
+            if (block == null || block.pos() == null) {
+                continue;
+            }
 
-            BlockPos worldPos = transformer.transform(block.pos());
+            BlockPos schematicPos = block.pos();
+            BlockPos worldPos = transformer.transform(schematicPos);
+
+            if (!level.isInWorldBounds(worldPos)
+                    || !level.hasChunkAt(worldPos)) {
+
+                results.add(new WorldResult(
+                        schematicPos,
+                        worldPos,
+                        block.blockId(),
+                        "unavailable",
+                        MatchStatus.UNAVAILABLE
+                ));
+
+                continue;
+            }
+
+            BlockState actualState = level.getBlockState(worldPos);
 
             String actual = BuiltInRegistries.BLOCK
-                    .getKey(level.getBlockState(worldPos).getBlock())
+                    .getKey(actualState.getBlock())
                     .toString();
 
             MatchStatus status;
@@ -71,7 +92,7 @@ public class WorldScanner {
             }
 
             results.add(new WorldResult(
-                    block.pos(),
+                    schematicPos,
                     worldPos,
                     block.blockId(),
                     actual,
@@ -87,4 +108,4 @@ public class WorldScanner {
                 Collections.unmodifiableList(results)
         );
     }
-          }
+}
