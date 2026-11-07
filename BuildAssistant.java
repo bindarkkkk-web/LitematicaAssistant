@@ -48,9 +48,20 @@ public class BuildAssistant {
     }
 
     public void stop() {
-        if (state != State.IDLE) {
-            state = State.READY;
+        if (loadedSchematic == null) {
+            state = State.IDLE;
+            return;
         }
+
+        materials.reset();
+        guide.reset();
+        queue.reset();
+        progress.reset();
+
+        // Muat ulang progress agar total block tetap terjaga.
+        progress.load(loadedSchematic);
+
+        state = State.READY;
     }
 
     public boolean markCompleted(BlockPos position, String blockId) {
@@ -60,7 +71,7 @@ public class BuildAssistant {
             return false;
         }
 
-        materials.markPlaced(blockId);
+        materials.markPlaced(position, blockId);
         queue.complete(position);
         guide.markCompleted(position);
 
@@ -73,7 +84,6 @@ public class BuildAssistant {
 
     public boolean reset() {
         if (loadedSchematic == null) return false;
-
         return load(loadedSchematic);
     }
 
