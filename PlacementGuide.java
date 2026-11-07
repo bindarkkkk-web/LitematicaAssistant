@@ -2,13 +2,7 @@
 package bindarkkk.litematicaassistant;
 
 import net.minecraft.core.BlockPos;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 public class PlacementGuide {
 
@@ -33,24 +27,27 @@ public class PlacementGuide {
 
     private Order order = Order.BOTTOM_UP;
     private BlockPos playerPosition = BlockPos.ZERO;
-    private int currentIndex = 0;
+    private PlacementTransformer transformer;
+    private int currentIndex;
 
     public void load(LitematicaBridge.ScanResult result) {
         blocks.clear();
         completed.clear();
         currentIndex = 0;
 
-        if (result == null || !result.success()) {
-            return;
-        }
+        if (result == null || !result.success()) return;
 
         blocks.addAll(result.blocks());
         sortBlocks();
     }
 
+    public void setTransformer(PlacementTransformer transformer) {
+        this.transformer = transformer;
+        sortBlocks();
+    }
+
     public void setOrder(Order order) {
         if (order == null) return;
-
         this.order = order;
         sortBlocks();
     }
@@ -58,7 +55,14 @@ public class PlacementGuide {
     public void setPlayerPosition(BlockPos position) {
         if (position != null) {
             playerPosition = position;
+            if (order == Order.NEAREST_FIRST) sortBlocks();
         }
+    }
+
+    private BlockPos worldPosition(BlockPos position) {
+        return transformer == null
+                ? position
+                : transformer.transform(position);
     }
 
     private void sortBlocks() {
@@ -82,15 +86,11 @@ public class PlacementGuide {
 
             case NEAREST_FIRST -> blocks.sort(
                     Comparator.comparingDouble(
-                            (LitematicaBridge.SchematicBlock b) ->
-                                    distanceSquared(b.pos(), playerPosition)
+                            b -> worldPosition(b.pos())
+                                    .distSqr(playerPosition)
                     )
             );
         }
-    }
-
-    private double distanceSquared(BlockPos a, BlockPos b) {
-        return a.distSqr(b);
     }
 
     public GuideEntry getNext() {
@@ -125,9 +125,7 @@ public class PlacementGuide {
     }
 
     public void undoCompleted(BlockPos position) {
-        if (position != null) {
-            completed.remove(position);
-        }
+        if (position != null) completed.remove(position);
     }
 
     public List<GuideEntry> getEntries() {
@@ -161,10 +159,8 @@ public class PlacementGuide {
     }
 
     public float getProgress() {
-        if (blocks.isEmpty()) return 0;
-
-        return (float) getCompletedCount()
-                / blocks.size() * 100f;
+        return blocks.isEmpty() ? 0
+                : (float) getCompletedCount() / blocks.size() * 100f;
     }
 
     public boolean isComplete() {
@@ -182,4 +178,4 @@ public class PlacementGuide {
         completed.clear();
         currentIndex = 0;
     }
-  }
+}
