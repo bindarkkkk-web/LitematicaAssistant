@@ -15,21 +15,22 @@ public class BuildAssistant {
     private final ProgressTracker progress = new ProgressTracker();
     private final CrafterAssistant crafters = new CrafterAssistant();
 
+    private LitematicaBridge.ScanResult loadedSchematic;
     private State state = State.IDLE;
 
     public boolean load(LitematicaBridge.ScanResult result) {
         if (result == null || !result.success()) return false;
 
+        loadedSchematic = result;
+
         materials.load(result);
         guide.load(result);
         queue.load(result);
         progress.load(result);
-
         crafters.clear();
 
         state = result.totalBlocks() > 0
-                ? State.READY
-                : State.IDLE;
+                ? State.READY : State.IDLE;
 
         return true;
     }
@@ -47,7 +48,9 @@ public class BuildAssistant {
     }
 
     public void stop() {
-        state = State.READY;
+        if (state != State.IDLE) {
+            state = State.READY;
+        }
     }
 
     public boolean markCompleted(BlockPos position, String blockId) {
@@ -66,6 +69,12 @@ public class BuildAssistant {
         }
 
         return true;
+    }
+
+    public boolean reset() {
+        if (loadedSchematic == null) return false;
+
+        return load(loadedSchematic);
     }
 
     public State getState() {
@@ -90,13 +99,5 @@ public class BuildAssistant {
 
     public CrafterAssistant getCrafters() {
         return crafters;
-    }
-
-    public void reset() {
-        materials.reset();
-        guide.reset();
-        queue.reset();
-        progress.reset();
-        state = State.IDLE;
     }
 }
