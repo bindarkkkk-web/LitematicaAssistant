@@ -7,7 +7,11 @@ import java.util.*;
 public class ProgressTracker {
 
     private final Set<BlockPos> completed = new HashSet<>();
-    private final Map<String, Integer> completedMaterials = new HashMap<>();
+    private final Map<String, Integer> completedMaterials =
+            new HashMap<>();
+
+    private final Map<BlockPos, String> expectedBlocks =
+            new HashMap<>();
 
     private int totalBlocks;
 
@@ -16,11 +20,22 @@ public class ProgressTracker {
 
         if (result == null || !result.success()) return;
 
-        totalBlocks = result.totalBlocks();
+        for (var block : result.blocks()) {
+            if (block == null || block.pos() == null) continue;
+            expectedBlocks.put(block.pos(), block.blockId());
+        }
+
+        totalBlocks = expectedBlocks.size();
     }
 
     public boolean markCompleted(BlockPos position, String blockId) {
         if (position == null || blockId == null) return false;
+
+        String expected = expectedBlocks.get(position);
+
+        if (expected == null || !expected.equals(blockId)) {
+            return false;
+        }
 
         if (!completed.add(position)) return false;
 
@@ -81,6 +96,7 @@ public class ProgressTracker {
     public void reset() {
         completed.clear();
         completedMaterials.clear();
+        expectedBlocks.clear();
         totalBlocks = 0;
     }
 }
