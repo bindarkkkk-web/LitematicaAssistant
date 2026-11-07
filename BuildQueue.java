@@ -94,32 +94,25 @@ public class BuildQueue {
     }
 
     private void activateNext() {
-        BlockPos activePosition = null;
+        boolean hasActive = false;
 
         for (QueueEntry entry : entries.values()) {
             if (entry.status() == Status.ACTIVE) {
-                activePosition = entry.position();
+                hasActive = true;
                 break;
             }
         }
 
-        if (activePosition != null) {
-            QueueEntry old = entries.get(activePosition);
-            entries.put(activePosition, copy(old, Status.WAITING));
-        }
-
-        BlockPos nextPosition = null;
+        if (hasActive) return;
 
         for (QueueEntry entry : entries.values()) {
             if (entry.status() == Status.WAITING) {
-                nextPosition = entry.position();
-                break;
+                entries.put(
+                        entry.position(),
+                        copy(entry, Status.ACTIVE)
+                );
+                return;
             }
-        }
-
-        if (nextPosition != null) {
-            QueueEntry old = entries.get(nextPosition);
-            entries.put(nextPosition, copy(old, Status.ACTIVE));
         }
     }
 
@@ -153,8 +146,12 @@ public class BuildQueue {
 
     public void reset() {
         for (QueueEntry entry : new ArrayList<>(entries.values())) {
-            entries.put(entry.position(), copy(entry, Status.WAITING));
+            entries.put(
+                    entry.position(),
+                    copy(entry, Status.WAITING)
+            );
         }
+
         activateNext();
     }
 
